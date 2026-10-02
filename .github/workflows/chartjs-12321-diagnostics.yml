@@ -32,10 +32,13 @@ jobs:
         run: |
           cp .github/repros/chartjs-12321-diagnostics.cjs "$RUNNER_TEMP/chartjs-12321-diagnostics.cjs"
           cp .github/repros/chartjs-12321-candidate.js "$RUNNER_TEMP/chartjs-12321-candidate.js"
+          cp .github/repros/chartjs-12321-candidate.png "$RUNNER_TEMP/chartjs-12321-candidate.png"
           git checkout --detach "$AUDIT_SHA"
           cp "$RUNNER_TEMP/chartjs-12321-candidate.js" test/fixtures/controller.polarArea/pointLabels/overlapping.js
+          cp "$RUNNER_TEMP/chartjs-12321-candidate.png" test/fixtures/controller.polarArea/pointLabels/overlapping.png
           pnpm install --frozen-lockfile
           pnpm build
+          pnpm exec eslint test/fixtures/controller.polarArea/pointLabels/overlapping.js
           node "$RUNNER_TEMP/chartjs-12321-diagnostics.cjs"
           mkdir -p audit-output
           cp test/fixtures/controller.polarArea/pointLabels/overlapping.png audit-output/expected.png
@@ -51,6 +54,11 @@ jobs:
             result=$?
             set -e
             printf '%s\n' "$result" > "audit-output/$browser-current-exit.txt"
+            set +e
+            NODE_ENV=test xvfb-run --auto-servernum pnpm exec karma start karma.conf.cjs --auto-watch --single-run --coverage --grep --browsers "$browser" > "audit-output/full-$browser-current.log" 2>&1
+            result=$?
+            set -e
+            printf '%s\n' "$result" > "audit-output/full-$browser-current-exit.txt"
           done
       - name: Compare Firefox 155
         env:
@@ -65,6 +73,16 @@ jobs:
           result=$?
           set -e
           printf '%s\n' "$result" > audit-output/firefox-155-exit.txt
+          set +e
+          FIREFOX_BIN="$RUNNER_TEMP/firefox155/firefox/firefox" NODE_ENV=test xvfb-run --auto-servernum pnpm exec karma start karma.conf.cjs --auto-watch --single-run --coverage --grep --browsers firefox > audit-output/full-firefox-155.log 2>&1
+          result=$?
+          set -e
+          printf '%s\n' "$result" > audit-output/full-firefox-155-exit.txt
+      - name: Verify every test command passed
+        run: |
+          for result in audit-output/*-exit.txt; do
+            test "$(cat "$result")" = 0 || exit 1
+          done
       - uses: actions/upload-artifact@v7
         if: always()
         with:
