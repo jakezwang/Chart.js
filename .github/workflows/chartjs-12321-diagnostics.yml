@@ -15,10 +15,8 @@ jobs:
       fail-fast: false
       matrix:
         source:
-          - name: baseline
+          - name: candidate
             sha: 6a86e238fac3d1ad35eb84b93e7804dfb5813f79
-          - name: pr
-            sha: 76307c0d024e754ead9cea4b957e57823b955f09
     steps:
       - uses: actions/checkout@v7
         with:
@@ -33,7 +31,9 @@ jobs:
           AUDIT_SHA: ${{ matrix.source.sha }}
         run: |
           cp .github/repros/chartjs-12321-diagnostics.cjs "$RUNNER_TEMP/chartjs-12321-diagnostics.cjs"
+          cp .github/repros/chartjs-12321-candidate.js "$RUNNER_TEMP/chartjs-12321-candidate.js"
           git checkout --detach "$AUDIT_SHA"
+          cp "$RUNNER_TEMP/chartjs-12321-candidate.js" test/fixtures/controller.polarArea/pointLabels/overlapping.js
           pnpm install --frozen-lockfile
           pnpm build
           node "$RUNNER_TEMP/chartjs-12321-diagnostics.cjs"

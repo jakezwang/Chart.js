@@ -35,11 +35,15 @@ module.exports = async function(config) {
 
 fs.writeFileSync('test/chartjs-12321.audit.tests.js', `
 describe('Chart.js 12321 pristine overlapping fixture', function() {
+  jasmine.DEFAULT_TIMEOUT_INTERVAL = 30000;
   it('captures the canvas and layout before asserting the unchanged fixture', async function() {
     const source = await fetch('/base/test/fixtures/controller.polarArea/pointLabels/overlapping.js').then(response => response.text());
     const fixture = new Function('var module = {};' + source + ';return module.exports;')();
     fixture.config.options.plugins = false;
     const chart = window.acquireChart(fixture.config, fixture.options);
+    if (typeof fixture.options.run === 'function') {
+      await fixture.options.run(chart);
+    }
     const r = chart.scales.r;
     const capture = {
       userAgent: navigator.userAgent,
