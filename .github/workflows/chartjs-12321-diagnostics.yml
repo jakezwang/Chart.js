@@ -1,0 +1,72 @@
+name: Chart.js 12321 Firefox diagnostics
+
+on:
+  push:
+    branches: [audit/chartjs-12321-firefox-20261001]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        source:
+          - name: baseline
+            sha: 6a86e238fac3d1ad35eb84b93e7804dfb5813f79
+          - name: pr
+            sha: 76307c0d024e754ead9cea4b957e57823b955f09
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6.1.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Prepare diagnostic harness and source
+        env:
+          AUDIT_SHA: ${{ matrix.source.sha }}
+        run: |
+          cp .github/repros/chartjs-12321-diagnostics.cjs "$RUNNER_TEMP/chartjs-12321-diagnostics.cjs"
+          git checkout --detach "$AUDIT_SHA"
+          pnpm install --frozen-lockfile
+          pnpm build
+          node "$RUNNER_TEMP/chartjs-12321-diagnostics.cjs"
+          mkdir -p audit-output
+          cp test/fixtures/controller.polarArea/pointLabels/overlapping.png audit-output/expected.png
+          firefox --version > audit-output/firefox-current-version.txt
+          google-chrome --version > audit-output/chrome-version.txt
+      - name: Compare Chromium and current Firefox
+        env:
+          AUDIT_SOURCE: ${{ matrix.source.name }}
+        run: |
+          for browser in chrome firefox; do
+            set +e
+            AUDIT_NAME="$AUDIT_SOURCE-$browser-current" NODE_ENV=test xvfb-run --auto-servernum pnpm exec karma start .audit-karma.cjs --single-run --browsers "$browser" > "audit-output/$browser-current.log" 2>&1
+            result=$?
+            set -e
+            printf '%s\n' "$result" > "audit-output/$browser-current-exit.txt"
+          done
+      - name: Compare Firefox 155
+        env:
+          AUDIT_SOURCE: ${{ matrix.source.name }}
+        run: |
+          curl --fail --location --retry 2 https://archive.mozilla.org/pub/firefox/releases/155.0/linux-x86_64/en-US/firefox-155.0.tar.xz -o "$RUNNER_TEMP/firefox-155.tar.xz"
+          mkdir -p "$RUNNER_TEMP/firefox155"
+          tar -xf "$RUNNER_TEMP/firefox-155.tar.xz" -C "$RUNNER_TEMP/firefox155"
+          "$RUNNER_TEMP/firefox155/firefox/firefox" --version > audit-output/firefox-155-version.txt
+          set +e
+          FIREFOX_BIN="$RUNNER_TEMP/firefox155/firefox/firefox" AUDIT_NAME="$AUDIT_SOURCE-firefox-155" NODE_ENV=test xvfb-run --auto-servernum pnpm exec karma start .audit-karma.cjs --single-run --browsers firefox > audit-output/firefox-155.log 2>&1
+          result=$?
+          set -e
+          printf '%s\n' "$result" > audit-output/firefox-155-exit.txt
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: chartjs-12321-${{ matrix.source.name }}
+          path: audit-output/
