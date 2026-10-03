@@ -15,8 +15,8 @@ jobs:
       fail-fast: false
       matrix:
         source:
-          - name: candidate
-            sha: 6a86e238fac3d1ad35eb84b93e7804dfb5813f79
+          - name: pr-sync
+            sha: 934d2b71d7b27a4d1a35f2af23decc904e7a8f19
     steps:
       - uses: actions/checkout@v7
         with:
@@ -31,14 +31,10 @@ jobs:
           AUDIT_SHA: ${{ matrix.source.sha }}
         run: |
           cp .github/repros/chartjs-12321-diagnostics.cjs "$RUNNER_TEMP/chartjs-12321-diagnostics.cjs"
-          cp .github/repros/chartjs-12321-candidate.js "$RUNNER_TEMP/chartjs-12321-candidate.js"
-          cp .github/repros/chartjs-12321-candidate.png "$RUNNER_TEMP/chartjs-12321-candidate.png"
           git checkout --detach "$AUDIT_SHA"
-          cp "$RUNNER_TEMP/chartjs-12321-candidate.js" test/fixtures/controller.polarArea/pointLabels/overlapping.js
-          cp "$RUNNER_TEMP/chartjs-12321-candidate.png" test/fixtures/controller.polarArea/pointLabels/overlapping.png
           pnpm install --frozen-lockfile
-          pnpm build
-          pnpm exec eslint test/fixtures/controller.polarArea/pointLabels/overlapping.js
+          pnpm run lint-types
+          pnpm exec eslint src/types/index.d.ts test/types/scales/grid.ts
           node "$RUNNER_TEMP/chartjs-12321-diagnostics.cjs"
           mkdir -p audit-output
           cp test/fixtures/controller.polarArea/pointLabels/overlapping.png audit-output/expected.png
